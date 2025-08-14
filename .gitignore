@@ -8,4 +8,4 @@ db.sqlite3
 *.db
 *.sqlite3
 *.log
-cqpteur_temp.csv
+capteur_temp.csv
