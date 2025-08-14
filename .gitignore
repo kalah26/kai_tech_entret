@@ -1,0 +1,11 @@
+.venv
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+db.sqlite3
+*.db
+*.sqlite3
+*.log
+cqpteur_temp.csv

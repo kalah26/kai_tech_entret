@@ -3,7 +3,7 @@
 
 **Candidat :** [Votre Nom]  
 **Date :** 14 août 2025  
-**Repositoire :** Solution complète pour l'analyse des données de capteurs IoT Kaikai  
+**Dépôt Github :** Solution complète pour l'analyse des données de capteurs IoT Kaikai  
 
 ---
 
@@ -12,8 +12,6 @@
 Cette solution complète comprend :
 - **Analyse Python** des données de qualité de l'air (Notebook Colab)
 - **Infrastructure DevOps** avec conteneurisation et CI/CD
-- **Base de données SQL** optimisée pour les données IoT
-- **Monitoring et alertes** en temps réel
 
 ---
 
@@ -24,12 +22,6 @@ Cette solution complète comprend :
 │   Data Sources  │───▶│  Kaikai Analysis │───▶│   Monitoring    │
 │   (IoT Sensors) │    │     Pipeline     │    │   & Alertes     │
 └─────────────────┘    └──────────────────┘    └─────────────────┘
-                                │
-                                ▼
-                       ┌──────────────────┐
-                       │  Base de Données │
-                       │    (SQLite/PG)   │
-                       └──────────────────┘
 ```
 
 ---
@@ -179,4 +171,4 @@ cd sql && sqlite3 test.db < kaikai_livrable_final.sql
 
 ---
 
-**Contact :** [moussaaminata.gueye@gmail.com] | **Linkedin :** [Votre LinkedIn]
+**Contact :** [moussaaminata.gueye@gmail.com] | **Linkedin :** [Linkedin](https://www.linkedin.com/in/moussa-aminata-gueye/)
