@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  # Lance votre conteneur d'analyse
+  kaikai-analysis:
+    build: .
+    container_name: kaikai-sensor-analysis
+    # Monte un volume pour les données CSV
+    volumes:
+      - ./:/app/data              # Monte le répertoire local pour accéder aux CSV
+      - ./output:/app/output      # Monte le dossier de sortie pour les résultats
+    # Configure les variables d'environnement nécessaires
+    environment:
+      - PYTHONUNBUFFERED=1        # Sortie Python en temps réel
+      - DATA_DIR=/app/data        # Répertoire des données CSV
+      - OUTPUT_DIR=/app/output    # Répertoire de sortie

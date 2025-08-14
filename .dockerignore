@@ -1,0 +1,10 @@
+# Ignorer les fichiers inutiles pour le build Docker
+*.ipynb
+*.pdf
+.git
+.gitignore
+output/
+kaikai_output/
+__pycache__/
+*.pyc
+*.pyo

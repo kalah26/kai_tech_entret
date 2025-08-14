@@ -1,0 +1,176 @@
+# Playbook Ansible simple pour déploiement Kaikai IoT Analysis
+---
+- name: Déploiement Kaikai IoT Analysis sur Ubuntu
+  hosts: kaikai_servers
+  become: yes
+  vars:
+    docker_image: "kaikai-analysis:latest"
+    data_directory: "/opt/kaikai/data"
+    output_directory: "/opt/kaikai/output"
+    
+  tasks:
+    # - Installer Docker sur un serveur Ubuntu
+    - name: Mettre à jour le cache apt
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Installer les dépendances Docker
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gnupg
+          - lsb-release
+        state: present
+
+    - name: Ajouter la clé GPG officielle Docker
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+
+    - name: Ajouter le repository Docker
+      apt_repository:
+        repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+        state: present
+
+    - name: Installer Docker CE
+      apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-compose-plugin
+        state: present
+
+    - name: Démarrer et activer Docker
+      systemd:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Ajouter l'utilisateur au groupe docker
+      user:
+        name: "{{ ansible_user }}"
+        groups: docker
+        append: yes
+
+    # - Déployer votre conteneur d'analyse
+    - name: Créer les répertoires de données
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+      loop:
+        - "{{ data_directory }}"
+        - "{{ output_directory }}"
+
+    - name: Copier le Dockerfile
+      copy:
+        src: ../Dockerfile
+        dest: /tmp/Dockerfile
+        mode: '0644'
+
+    - name: Copier le script d'analyse
+      copy:
+        src: ../kaikai_sensor_analysis.py
+        dest: /tmp/kaikai_sensor_analysis.py
+        mode: '0644'
+
+    - name: Copier les requirements
+      copy:
+        src: ../requirements.txt
+        dest: /tmp/requirements.txt
+        mode: '0644'
+
+    - name: Construire l'image Docker Kaikai
+      docker_image:
+        build:
+          path: /tmp
+        name: "{{ docker_image }}"
+        tag: latest
+        source: build
+
+    - name: Arrêter le conteneur existant (si présent)
+      docker_container:
+        name: kaikai-analysis
+        state: absent
+      ignore_errors: yes
+
+    - name: Déployer le conteneur Kaikai
+      docker_container:
+        name: kaikai-analysis
+        image: "{{ docker_image }}"
+        state: present
+        volumes:
+          - "{{ data_directory }}:/app/data"
+          - "{{ output_directory }}:/app/output"
+        environment:
+          PYTHONUNBUFFERED: "1"
+        restart_policy: unless-stopped
+
+    # - Configurer un cron job pour l'exécution journalière
+    - name: Créer le script de lancement quotidien
+      copy:
+        dest: /usr/local/bin/kaikai-daily-analysis.sh
+        content: |
+          #!/bin/bash
+          # Script d'analyse quotidienne Kaikai IoT
+          
+          # Vérifier si des fichiers CSV sont présents
+          if [ -n "$(find {{ data_directory }} -name "*.csv" -type f)" ]; then
+              echo "$(date): Démarrage analyse Kaikai"
+              
+              # Lancer le conteneur pour l'analyse
+              docker run --rm \
+                  -v {{ data_directory }}:/app/data \
+                  -v {{ output_directory }}:/app/output \
+                  {{ docker_image }}
+              
+              echo "$(date): Analyse Kaikai terminée"
+          else
+              echo "$(date): Aucun fichier CSV trouvé dans {{ data_directory }}"
+          fi
+        mode: '0755'
+        owner: root
+        group: root
+
+    - name: Configurer le cron job quotidien
+      cron:
+        name: "Analyse quotidienne Kaikai IoT"
+        minute: "0"
+        hour: "6"
+        job: "/usr/local/bin/kaikai-daily-analysis.sh >> /var/log/kaikai-analysis.log 2>&1"
+        user: root
+        state: present
+
+    - name: Créer le fichier de log
+      file:
+        path: /var/log/kaikai-analysis.log
+        state: touch
+        mode: '0644'
+        owner: root
+        group: root
+
+    - name: Configurer la rotation des logs
+      copy:
+        dest: /etc/logrotate.d/kaikai-analysis
+        content: |
+          /var/log/kaikai-analysis.log {
+              daily
+              rotate 30
+              compress
+              delaycompress
+              notifempty
+              create 0644 root root
+          }
+        mode: '0644'
+
+  handlers:
+    - name: restart docker
+      systemd:
+        name: docker
+        state: restarted

@@ -1,0 +1,97 @@
+# Pipeline GitLab CI simple pour Kaikai IoT Analysis
+stages:
+  - test
+  - build
+  - deploy
+  - notify
+
+variables:
+  DOCKER_IMAGE: "kaikai-analysis"
+  STAGING_SERVER: "staging.kaikai.local"
+
+# 1. Lance les tests unitaires
+test:
+  stage: test
+  image: python:3.11-slim
+  before_script:
+    - pip install -r requirements.txt
+    - pip install pytest
+  script:
+    - python -m pytest tests/ -v
+  artifacts:
+    reports:
+      junit: test-results.xml
+  only:
+    - main
+    - develop
+
+# 2. Construit l'image Docker
+build:
+  stage: build
+  image: docker:latest
+  services:
+    - docker:dind
+  before_script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  script:
+    - docker build -t $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA .
+    - docker build -t $CI_REGISTRY_IMAGE:latest .
+    - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
+    - docker push $CI_REGISTRY_IMAGE:latest
+  only:
+    - main
+
+# 3. Déploie sur un serveur de staging
+deploy_staging:
+  stage: deploy
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache openssh-client
+    - eval $(ssh-agent -s)
+    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - ssh-keyscan $STAGING_SERVER >> ~/.ssh/known_hosts
+  script:
+    - |
+      ssh deploy@$STAGING_SERVER "
+        docker pull $CI_REGISTRY_IMAGE:latest
+        docker stop kaikai-analysis || true
+        docker rm kaikai-analysis || true
+        docker run -d --name kaikai-analysis -v /data:/app/data -v /output:/app/output $CI_REGISTRY_IMAGE:latest
+      "
+  environment:
+    name: staging
+    url: http://$STAGING_SERVER
+  only:
+    - main
+
+# 4. Envoie une notification Slack
+notify:
+  stage: notify
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache curl
+  script:
+    - |
+      curl -X POST -H 'Content-type: application/json' \
+        --data "{\"text\":\"✅ Déploiement Kaikai réussi!\n📦 Image: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA\n🌍 Environnement: staging\n👤 Par: $GITLAB_USER_NAME\"}" \
+        $SLACK_WEBHOOK_URL
+  when: on_success
+  only:
+    - main
+
+# Notification d'échec
+notify_failure:
+  stage: notify
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache curl
+  script:
+    - |
+      curl -X POST -H 'Content-type: application/json' \
+        --data "{\"text\":\"❌ Échec du déploiement Kaikai!\n📦 Commit: $CI_COMMIT_SHA\n👤 Par: $GITLAB_USER_NAME\n🔗 Pipeline: $CI_PIPELINE_URL\"}" \
+        $SLACK_WEBHOOK_URL
+  when: on_failure
+  only:
+    - main
